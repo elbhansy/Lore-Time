@@ -1,0 +1,17 @@
+from abc import ABC, abstractmethod
+from typing import List, Optional
+from ..entities.character import Character
+from ..value_objects.entity_id import EntityId
+
+class CharacterRepository(ABC):
+    @abstractmethod
+    def get(self, id: EntityId) -> Optional[Character]:
+        pass
+
+    @abstractmethod
+    def get_all_by_series(self, series_id: EntityId) -> List[Character]:
+        pass
+
+    @abstractmethod
+    def save(self, character: Character) -> None:
+        pass

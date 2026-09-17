@@ -1,0 +1,51 @@
+# M3.0 — PostgreSQL Acceptance Closure
+
+## Objective
+
+Close the remaining M3.0 acceptance gap.
+
+M3.0 implementation is complete. Do NOT add new product features or redesign existing architecture.
+
+The only remaining blocker is that the 5 PostgreSQL integration tests were written but auto-skipped because PostgreSQL is unreachable on localhost:5432.
+
+Your task is to make the integration environment available, execute the existing tests against a real PostgreSQL instance, diagnose any failures, fix only issues required for M3.0 acceptance, and produce a final verification report.
+
+## Constraints & Rules
+
+- Do NOT skip the 5 PostgreSQL integration tests.
+- Do NOT mock PostgreSQL.
+- Do NOT replace integration tests with unit tests.
+- Do NOT weaken assertions.
+- Do NOT remove existing tests.
+- Do NOT modify tests merely to make them pass.
+- Do NOT introduce Docker as a project runtime dependency.
+- Prefer the existing project's database configuration and infrastructure.
+- If PostgreSQL is already installed locally, use it.
+- If PostgreSQL is not installed, detect this explicitly and report the exact blocker instead of pretending verification succeeded.
+- Preserve the existing architecture.
+- Do NOT introduce new ORM/domain coupling.
+- Do NOT change Analytics contracts unless a real implementation defect is discovered.
+- Fix pre-existing issues only when they directly prevent M3.0 verification.
+- Keep all fixes minimal and scoped.
+- The final acceptance must use a real PostgreSQL database.
+
+## Step 1 — Inspect Existing Environment
+
+Determine:
+
+- PostgreSQL installation/status
+- PostgreSQL service status
+- localhost:5432 availability
+- active database configuration
+- environment variables / `.env`
+- existing migration system
+- existing test database configuration
+- existing fixtures/seeding mechanism
+
+Commands may include:
+
+```powershell
+Get-Service *postgres*
+Get-Process postgres -ErrorAction SilentlyContinue
+Get-NetTCPConnection -LocalPort 5432 -ErrorAction SilentlyContinue
+psql --version

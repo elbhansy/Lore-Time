@@ -1,0 +1,25 @@
+Act as a Principal Software Engineer and Product Architect. I am planning to build a project in the Manga / Manhwa tech space, and I need a comprehensive technical and architectural breakdown to understand and execute it.
+
+Here are the project details:
+[INSERT PROJECT CONCEPT & DETAILS HERE - e.g., Title, Core Features, Target Users, Desired Tech Stack]
+
+Please analyze this project thoroughly and provide:
+
+1. System Architecture & High-Level Design:
+   - Recommended tech stack (Frontend, Backend, Database, AI/CV Models or Services if applicable).
+   - Component / Data Flow diagram (described clearly in text/mermaid).
+   - Core API endpoints and data models/schema.
+
+2. Core Technical Challenges & Solutions:
+   - Identify the hardest technical bottlenecks (e.g., rendering performance, low-latency processing, image manipulation, real-time sync).
+   - Concrete algorithms, libraries, or architectural patterns to overcome them.
+
+3. Step-by-Step Implementation Roadmap:
+   - Phase 1: Minimal Viable Product (MVP) core milestone.
+   - Phase 2: Feature completion & optimization.
+   - Phase 3: Scaling, edge cases, and deployment.
+
+4. Edge Cases & UX Considerations:
+   - Critical pitfalls to avoid regarding user experience and performance.
+
+Keep the tone structured, highly practical, and production-ready with clean code structure snippets where relevant.

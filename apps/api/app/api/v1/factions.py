@@ -1,0 +1,147 @@
+import uuid
+
+from fastapi import APIRouter, Depends, Query
+
+from ...application.exceptions import ResourceNotFound
+from ...application.factions.get_faction_explorer import GetFactionExplorerUseCase
+from ...application.factions.get_faction_leadership import GetFactionLeadershipUseCase
+from ...application.factions.get_faction_members import GetFactionMembersUseCase
+from ...application.factions.get_faction_profile import GetFactionProfileUseCase
+from ...application.factions.get_faction_timeline import GetFactionTimelineUseCase
+from ...application.graph.get_temporal_graph import GraphEntitiesProvider
+from ...dependencies.services import (
+    get_timeline_events_use_case,
+    get_world_state_use_case,
+)
+from ...schemas.factions import (
+    FactionExplorerItemDTO,
+    FactionLeadershipDTO,
+    FactionMemberDTO,
+    FactionProfileDTO,
+)
+
+router = APIRouter(tags=["Factions"])
+
+
+def get_entities_provider() -> GraphEntitiesProvider:
+    return GraphEntitiesProvider()
+
+
+def get_faction_explorer_use_case(
+    ws_uc=Depends(get_world_state_use_case), provider=Depends(get_entities_provider)
+):
+    return GetFactionExplorerUseCase(ws_uc, provider)
+
+
+def get_faction_profile_use_case(
+    ws_uc=Depends(get_world_state_use_case), provider=Depends(get_entities_provider)
+):
+    return GetFactionProfileUseCase(ws_uc, provider)
+
+
+def get_faction_members_use_case(
+    ws_uc=Depends(get_world_state_use_case), provider=Depends(get_entities_provider)
+):
+    return GetFactionMembersUseCase(ws_uc, provider)
+
+
+def get_faction_leadership_use_case(
+    ws_uc=Depends(get_world_state_use_case), provider=Depends(get_entities_provider)
+):
+    return GetFactionLeadershipUseCase(ws_uc, provider)
+
+
+def get_faction_timeline_use_case(tl_uc=Depends(get_timeline_events_use_case)):
+    return GetFactionTimelineUseCase(_TimelineBackendAdapter(tl_uc))
+
+
+class _TimelineBackendAdapter:
+    """GetFactionTimelineUseCase expects a backend with
+    execute(series_id, chapter) -> list[dict]; GetTimelineEventsUseCase
+    exposes execute(series_id, reader_chapter, from, to) -> list[EventEnvelope].
+    Bridge at the DI seam."""
+
+    def __init__(self, tl_uc):
+        self.tl_uc = tl_uc
+
+    def execute(self, series_id, chapter):
+        envelopes = self.tl_uc.execute(
+            series_id, reader_chapter=chapter, from_chapter=1, to_chapter=chapter
+        )
+        return [
+            {
+                "id": str(env.event.id.value),
+                "type": env.event.type.value,
+                "subject_id": str(env.event.subject_id.value),
+                "target_id": str(env.event.target_id.value)
+                if env.event.target_id
+                else None,
+            }
+            for env in envelopes
+        ]
+
+
+@router.get("/series/{series_id}/factions", response_model=list[FactionExplorerItemDTO])
+def get_factions(
+    series_id: uuid.UUID,
+    chapter: int = Query(..., ge=1),
+    use_case: GetFactionExplorerUseCase = Depends(get_faction_explorer_use_case),
+):
+    return use_case.execute(series_id, chapter)
+
+
+@router.get(
+    "/series/{series_id}/factions/{faction_id}", response_model=FactionProfileDTO
+)
+def get_faction_profile(
+    series_id: uuid.UUID,
+    faction_id: str,
+    chapter: int = Query(..., ge=1),
+    use_case: GetFactionProfileUseCase = Depends(get_faction_profile_use_case),
+):
+    try:
+        return use_case.execute(series_id, faction_id, chapter)
+    except ValueError as e:
+        raise ResourceNotFound(str(e))
+
+
+@router.get(
+    "/series/{series_id}/factions/{faction_id}/members",
+    response_model=list[FactionMemberDTO],
+)
+def get_faction_members(
+    series_id: uuid.UUID,
+    faction_id: str,
+    chapter: int = Query(..., ge=1),
+    use_case: GetFactionMembersUseCase = Depends(get_faction_members_use_case),
+):
+    try:
+        return use_case.execute(series_id, faction_id, chapter)
+    except ValueError as e:
+        raise ResourceNotFound(str(e))
+
+
+@router.get(
+    "/series/{series_id}/factions/{faction_id}/leadership",
+    response_model=list[FactionLeadershipDTO],
+)
+def get_faction_leadership(
+    series_id: uuid.UUID,
+    faction_id: str,
+    chapter: int = Query(..., ge=1),
+    use_case: GetFactionLeadershipUseCase = Depends(get_faction_leadership_use_case),
+):
+    try:
+        return use_case.execute(series_id, faction_id, chapter)
+    except ValueError as e:
+        raise ResourceNotFound(str(e))
+
+
+@router.get("/series/{series_id}/factions/{faction_id}/timeline")
+def get_faction_timeline(
+    series_id: uuid.UUID,
+    faction_id: str,
+    chapter: int = Query(..., ge=1),
+    use_case: GetFactionTimelineUseCase = Depends(get_faction_timeline_use_case),
+):
+    return use_case.execute(series_id, faction_id, chapter)

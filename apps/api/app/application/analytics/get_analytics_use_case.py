@@ -1,0 +1,93 @@
+from uuid import UUID
+
+from apps.api.app.core.cache import CacheService, get_cache_service
+from packages.domain.analytics.analytics_query import AnalyticsQuery
+from packages.domain.analytics.analytics_reader import AnalyticsReader
+from packages.domain.analytics.character_activity_metric import CharacterActivityMetric
+from packages.domain.analytics.event_statistics import EventStatistics
+from packages.domain.analytics.relationship_metric import RelationshipAnalytics
+from packages.domain.repositories.series_repository import SeriesRepository
+from packages.domain.value_objects.entity_id import EntityId
+
+from ..exceptions import SeriesNotFound
+
+
+class GetAnalyticsUseCase:
+    """Single read-only use case over the AnalyticsReader port.
+
+    Enforces series existence (404 via global handler) and delegates all
+    metric computation to the deterministic reader. No mutation paths.
+    """
+
+    def __init__(
+        self,
+        reader: AnalyticsReader,
+        series_repo: SeriesRepository,
+        cache_service: CacheService | None = None,
+    ):
+        self.reader = reader
+        self.series_repo = series_repo
+        self.cache_service = cache_service or get_cache_service()
+
+    def _ensure_series(self, series_id: UUID) -> str:
+        s_id = EntityId(series_id)
+        if not self.series_repo.get(s_id):
+            raise SeriesNotFound(f"Series with id {series_id} not found")
+        return str(series_id)
+
+    @staticmethod
+    def _build_query(
+        series_id: str, from_chapter, to_chapter, page=1, limit=50
+    ) -> AnalyticsQuery:
+        return AnalyticsQuery(
+            series_id=series_id,
+            from_chapter=from_chapter,
+            to_chapter=to_chapter,
+            page=page,
+            limit=limit,
+        )
+
+    # -- M3.0.2 / overview -------------------------------------------------
+    def get_overview(
+        self, series_id: UUID, from_chapter=None, to_chapter=None
+    ) -> EventStatistics:
+        sid_str = self._ensure_series(series_id)
+        q = self._build_query(sid_str, from_chapter, to_chapter)
+
+        def compute_overview():
+            return self.reader.get_event_statistics(q)
+
+        return self.cache_service.get_or_compute(
+            series_id=series_id,
+            resource="analytics_overview",
+            compute_fn=compute_overview,
+            reader_chapter=to_chapter,
+            query_params={"from": from_chapter, "to": to_chapter},
+        )
+
+    # -- entity activity (M3.0.3) -----------------------------------------
+    def get_entity_activity(
+        self,
+        series_id: UUID,
+        entity_id: str | None = None,
+        from_chapter=None,
+        to_chapter=None,
+        limit: int = 50,
+    ) -> list[CharacterActivityMetric]:
+        q = self._build_query(
+            self._ensure_series(series_id), from_chapter, to_chapter, limit=limit
+        )
+        return self.reader.get_entity_activity(q, entity_id)
+
+    # -- relationship analytics (M3.0.4) ----------------------------------
+    def get_relationship_analytics(
+        self,
+        series_id: UUID,
+        from_chapter=None,
+        to_chapter=None,
+        limit: int = 50,
+    ) -> RelationshipAnalytics:
+        q = self._build_query(
+            self._ensure_series(series_id), from_chapter, to_chapter, limit=limit
+        )
+        return self.reader.get_relationship_analytics(q)

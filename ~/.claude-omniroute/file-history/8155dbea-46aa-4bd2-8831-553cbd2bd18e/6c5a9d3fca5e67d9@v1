@@ -1,0 +1,20 @@
+import uuid
+from typing import Dict, Any, List
+from packages.domain.value_objects.entity_id import EntityId
+from apps.api.app.application.timeline.get_timeline import GetTimelineUseCase
+
+class GetFactionTimelineUseCase:
+    def __init__(self, get_timeline_uc: GetTimelineUseCase):
+        self.get_timeline_uc = get_timeline_uc
+        
+    def execute(self, series_id: uuid.UUID, faction_id: str, chapter: int) -> List[Dict[str, Any]]:
+        # Get full valid timeline up to chapter
+        timeline = self.get_timeline_uc.execute(series_id, chapter)
+        
+        # Filter for events involving the faction directly
+        faction_timeline = []
+        for event in timeline:
+            if event["subject_id"] == faction_id or event["target_id"] == faction_id:
+                faction_timeline.append(event)
+                
+        return faction_timeline

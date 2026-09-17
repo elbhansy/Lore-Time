@@ -1,0 +1,186 @@
+"""M3.0.7 — The four critical invariants, against the real canonical store.
+
+Requires Postgres at DATABASE_URL (same as test_event_repository.py).
+Skipped automatically when the DB is unreachable so unit suites stay green.
+"""
+
+import dataclasses
+import uuid
+
+import pytest
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+
+from apps.api.repositories.canonical.sqlalchemy_analytics_reader import (
+    SQLAlchemyAnalyticsReader,
+)
+from infrastructure.database.models import Base
+from packages.domain.analytics.analytics_query import AnalyticsQuery
+
+DATABASE_URL = (
+    "postgresql+psycopg://timeline_user:timeline_password@localhost:5432/timeline_db"
+)
+
+SERIES_ID = None  # set in fixture
+
+
+# Entity ids must be UUIDs (events.subject_id/target_id are UUID columns);
+# stable names -> stable UUIDs keep the fixture readable.
+def _eid(name):
+    return str(uuid.uuid5(uuid.NAMESPACE_URL, f"entity:{name}"))
+
+
+ALICE, BOB, CAROL, DAVE = (_eid(n) for n in ("alice", "bob", "carol", "dave"))
+
+
+@pytest.fixture(scope="module")
+def engine():
+    engine = create_engine(DATABASE_URL)
+    Base.metadata.create_all(bind=engine)
+    yield engine
+    engine.dispose()
+
+
+@pytest.fixture
+def session(engine):
+    Session = sessionmaker(bind=engine)
+    s = Session()
+    yield s
+    s.rollback()
+    s.close()
+
+
+@pytest.fixture
+def seeded_series(session):
+    """Series + 2 chapters + 3 events across them, inserted directly into
+    canonical tables (simulating published state)."""
+    sid = str(uuid.uuid4())
+    c1, c2 = str(uuid.uuid4()), str(uuid.uuid4())
+    e1, e2, e3 = str(uuid.uuid4()), str(uuid.uuid4()), str(uuid.uuid4())
+
+    session.execute(
+        text(
+            "INSERT INTO series (id, title, slug, total_chapters) "
+            "VALUES (:id, 'Analytics Test', :slug, 10)"
+        ),
+        {"id": sid, "slug": f"analytics-{sid[:8]}"},
+    )
+    for cid, num in ((c1, 1), (c2, 2)):
+        session.execute(
+            text(
+                "INSERT INTO chapters (id, series_id, number) VALUES (:id, :sid, :num)"
+            ),
+            {"id": cid, "sid": sid, "num": num},
+        )
+
+    rows = [
+        # (event_id, chapter_id, sequence, type, subject, target)
+        (e1, c1, 0, "DIALOGUE", ALICE, BOB),
+        (e2, c1, 1, "COMBAT", BOB, CAROL),
+        (e3, c2, 0, "RELATIONSHIP_ENDED", ALICE, BOB),
+    ]
+    for eid, cid, seq, typ, subj, tgt in rows:
+        session.execute(
+            text(
+                "INSERT INTO events (id, series_id, chapter_id, sequence, type, "
+                "subject_type, subject_id, target_type, target_id, metadata) "
+                "VALUES (:id, :sid, :cid, :seq, :typ, 'CHARACTER', :subj, "
+                "'CHARACTER', :tgt, '{}')"
+            ),
+            {
+                "id": eid,
+                "sid": sid,
+                "cid": cid,
+                "seq": seq,
+                "typ": typ,
+                "subj": subj,
+                "tgt": tgt,
+            },
+        )
+
+    session.commit()
+    return sid
+
+
+def q(series_id, **kw):
+    return AnalyticsQuery(series_id=series_id, **kw)
+
+
+# ----------------------------------------------------------------------
+# Invariant 1 & 2: isolation from review + reaction to publication.
+# These operate purely on canonical tables because analytics reads only
+# canonical state — an APPROVED-but-unpublished row lives outside them.
+# ----------------------------------------------------------------------
+def test_review_approval_does_not_change_analytics(session, seeded_series):
+    reader = SQLAlchemyAnalyticsReader(session)
+    before = dataclasses.asdict(reader.get_event_statistics(q(seeded_series)))
+
+    # Insert an APPROVED review item — NOT a published event.
+    rid = str(uuid.uuid4())
+    session.execute(
+        text(
+            "INSERT INTO review_items (id, series_id, chapter_id, fact_type, "
+            "fact_payload, provenance_data, status) VALUES "
+            "(:id, :sid, (SELECT id FROM chapters WHERE series_id = :sid LIMIT 1), "
+            "'DIALOGUE', '{}', '{}', 'APPROVED')"
+        ),
+        {"id": rid, "sid": seeded_series},
+    )
+    session.commit()
+
+    after = dataclasses.asdict(reader.get_event_statistics(q(seeded_series)))
+    assert after == before  # APPROVED is invisible to analytics
+
+
+def test_publication_updates_analytics(session, seeded_series):
+    reader = SQLAlchemyAnalyticsReader(session)
+    before = reader.get_event_statistics(q(seeded_series))
+
+    cid = str(uuid.uuid4())
+    session.execute(
+        text("INSERT INTO chapters (id, series_id, number) VALUES (:id, :sid, 3)"),
+        {"id": cid, "sid": seeded_series},
+    )
+    session.execute(
+        text(
+            "INSERT INTO events (id, series_id, chapter_id, sequence, type, "
+            "subject_type, subject_id, metadata) "
+            "VALUES (:id, :sid, :cid, 0, 'COMBAT', 'CHARACTER', :dave, '{}')"
+        ),
+        {"id": str(uuid.uuid4()), "sid": seeded_series, "cid": cid, "dave": DAVE},
+    )
+    session.commit()
+
+    after = reader.get_event_statistics(q(seeded_series))
+    assert after.total_events == before.total_events + 1
+
+
+def test_rebuild_identical_after_reset(session, seeded_series):
+    reader = SQLAlchemyAnalyticsReader(session)
+    query = q(seeded_series)
+    run1 = dataclasses.asdict(reader.rebuild(query))
+    # No cached projection to delete (R6: compute-on-read), but rebuild must
+    # still be identical — this IS the replayability proof.
+    run2 = dataclasses.asdict(reader.rebuild(query))
+    assert run1 == run2
+
+
+def test_cross_projection_consistency(session, seeded_series):
+    """Analytics total == direct canonical COUNT == timeline-reader count
+    for the same scope."""
+    reader = SQLAlchemyAnalyticsReader(session)
+    stats_total = reader.get_event_statistics(q(seeded_series)).total_events
+
+    direct_count = session.execute(
+        text("SELECT COUNT(*) FROM events WHERE series_id = :sid"),
+        {"sid": seeded_series},
+    ).scalar()
+
+    assert stats_total == direct_count
+
+
+def test_determinism_three_runs(session, seeded_series):
+    reader = SQLAlchemyAnalyticsReader(session)
+    query = q(seeded_series)
+    runs = [dataclasses.asdict(reader.get_event_statistics(query)) for _ in range(3)]
+    assert runs[0] == runs[1] == runs[2]

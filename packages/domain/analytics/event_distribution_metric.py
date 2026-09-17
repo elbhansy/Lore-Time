@@ -1,0 +1,10 @@
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class EventDistributionMetric:
+    """One bucket of a distribution: a key (chapter number, event type,
+    entity id, ...) and how many canonical events fall into it."""
+
+    key: str
+    count: int

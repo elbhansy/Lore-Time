@@ -1,0 +1,89 @@
+import uuid
+from fastapi import APIRouter, Depends, Query, HTTPException
+from typing import List
+
+from ...application.factions.get_faction_explorer import GetFactionExplorerUseCase
+from ...application.factions.get_faction_profile import GetFactionProfileUseCase
+from ...application.factions.get_faction_members import GetFactionMembersUseCase
+from ...application.factions.get_faction_leadership import GetFactionLeadershipUseCase
+from ...application.factions.get_faction_timeline import GetFactionTimelineUseCase
+from ...application.timeline.get_world_state import GetWorldStateUseCase
+from ...application.timeline.get_timeline import GetTimelineUseCase
+from ...application.graph.get_temporal_graph import GraphEntitiesProvider
+
+from ...dependencies.services import get_world_state_use_case, get_timeline_use_case
+from ...schemas.factions import FactionExplorerItemDTO, FactionProfileDTO, FactionMemberDTO, FactionLeadershipDTO
+
+router = APIRouter(tags=["Factions"])
+
+def get_entities_provider() -> GraphEntitiesProvider:
+    return GraphEntitiesProvider()
+
+def get_faction_explorer_use_case(ws_uc=Depends(get_world_state_use_case), provider=Depends(get_entities_provider)):
+    return GetFactionExplorerUseCase(ws_uc, provider)
+
+def get_faction_profile_use_case(ws_uc=Depends(get_world_state_use_case), provider=Depends(get_entities_provider)):
+    return GetFactionProfileUseCase(ws_uc, provider)
+
+def get_faction_members_use_case(ws_uc=Depends(get_world_state_use_case), provider=Depends(get_entities_provider)):
+    return GetFactionMembersUseCase(ws_uc, provider)
+
+def get_faction_leadership_use_case(ws_uc=Depends(get_world_state_use_case), provider=Depends(get_entities_provider)):
+    return GetFactionLeadershipUseCase(ws_uc, provider)
+
+def get_faction_timeline_use_case(tl_uc=Depends(get_timeline_use_case)):
+    return GetFactionTimelineUseCase(tl_uc)
+
+
+@router.get("/series/{series_id}/factions", response_model=List[FactionExplorerItemDTO])
+def get_factions(
+    series_id: uuid.UUID,
+    chapter: int = Query(...),
+    use_case: GetFactionExplorerUseCase = Depends(get_faction_explorer_use_case)
+):
+    return use_case.execute(series_id, chapter)
+
+@router.get("/series/{series_id}/factions/{faction_id}", response_model=FactionProfileDTO)
+def get_faction_profile(
+    series_id: uuid.UUID,
+    faction_id: str,
+    chapter: int = Query(...),
+    use_case: GetFactionProfileUseCase = Depends(get_faction_profile_use_case)
+):
+    try:
+        return use_case.execute(series_id, faction_id, chapter)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/series/{series_id}/factions/{faction_id}/members", response_model=List[FactionMemberDTO])
+def get_faction_members(
+    series_id: uuid.UUID,
+    faction_id: str,
+    chapter: int = Query(...),
+    use_case: GetFactionMembersUseCase = Depends(get_faction_members_use_case)
+):
+    try:
+        return use_case.execute(series_id, faction_id, chapter)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/series/{series_id}/factions/{faction_id}/leadership", response_model=List[FactionLeadershipDTO])
+def get_faction_leadership(
+    series_id: uuid.UUID,
+    faction_id: str,
+    chapter: int = Query(...),
+    use_case: GetFactionLeadershipUseCase = Depends(get_faction_leadership_use_case)
+):
+    try:
+        return use_case.execute(series_id, faction_id, chapter)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+
+@router.get("/series/{series_id}/factions/{faction_id}/timeline")
+def get_faction_timeline(
+    series_id: uuid.UUID,
+    faction_id: str,
+    chapter: int = Query(...),
+    use_case: GetFactionTimelineUseCase = Depends(get_faction_timeline_use_case)
+):
+    return use_case.execute(series_id, faction_id, chapter)

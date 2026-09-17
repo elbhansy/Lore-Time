@@ -1,0 +1,9 @@
+{
+  "id": "9",
+  "subject": "Execute M3.0.7 integration tests + final report",
+  "description": "Execute the 5 previously-skipped integration tests, fix only acceptance-blocking issues, report",
+  "activeForm": "Running M3.0 integration tests on real PG",
+  "status": "in_progress",
+  "blocks": [],
+  "blockedBy": []
+}

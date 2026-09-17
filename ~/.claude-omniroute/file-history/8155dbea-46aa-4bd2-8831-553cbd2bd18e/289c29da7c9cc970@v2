@@ -1,0 +1,14 @@
+class ApplicationError(Exception):
+    pass
+
+class SeriesNotFound(ApplicationError):
+    pass
+
+class CharacterNotFound(ApplicationError):
+    pass
+
+class EntityNotFound(ApplicationError):
+    pass
+
+class InvalidChapter(ApplicationError):
+    pass

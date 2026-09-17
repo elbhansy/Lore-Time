@@ -1,0 +1,62 @@
+from typing import List, Optional
+from pydantic import BaseModel
+
+from packages.domain.analytics.event_distribution_metric import EventDistributionMetric
+
+
+class EventDistributionDTO(BaseModel):
+    key: str
+    count: int
+
+
+class EventStatisticsResponse(BaseModel):
+    total_events: int
+    chapters: int
+    events_by_chapter: List[EventDistributionDTO]
+    events_by_type: List[EventDistributionDTO]
+    events_by_sequence: List[EventDistributionDTO]
+    events_by_entity: List[EventDistributionDTO]
+
+
+class AnalyticsOverviewResponse(BaseModel):
+    series_id: str
+    from_chapter: Optional[int]
+    to_chapter: Optional[int]
+    statistics: EventStatisticsResponse
+
+
+class CharacterActivityResponse(BaseModel):
+    entity_id: str
+    event_count: int
+    subject_count: int
+    target_count: int
+    relationship_count: int
+    chapters_present: int
+    first_seen_chapter: Optional[int]
+    last_seen_chapter: Optional[int]
+
+
+class RelationshipMetricDTO(BaseModel):
+    entity_id: str
+    relationship_type: str
+    count: int
+
+
+class RelationshipChapterDeltaDTO(BaseModel):
+    chapter_number: int
+    created: int
+    changed: int
+    ended: int
+
+
+class RelationshipAnalyticsResponse(BaseModel):
+    frequency: List[RelationshipMetricDTO]
+    most_connected: List[EventDistributionDTO]
+    interaction_frequency: List[EventDistributionDTO]
+    changes_by_chapter: List[RelationshipChapterDeltaDTO]
+
+
+# Re-export so the route layer can build DTOs from domain metrics without
+# importing pydantic types by hand-mapping every field.
+def to_distribution(dtos) -> List[EventDistributionDTO]:
+    return [EventDistributionDTO(key=b.key, count=b.count) for b in dtos]

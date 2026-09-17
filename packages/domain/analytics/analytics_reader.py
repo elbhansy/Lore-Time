@@ -1,0 +1,36 @@
+from abc import ABC, abstractmethod
+
+from .analytics_query import AnalyticsQuery
+from .analytics_snapshot import AnalyticsSnapshot
+from .character_activity_metric import CharacterActivityMetric
+from .event_statistics import EventStatistics
+from .relationship_metric import RelationshipAnalytics
+
+
+class AnalyticsReader(ABC):
+    """Read-only port over the Canonical Event Store.
+
+    Implementations must be deterministic: same canonical dataset in,
+    byte-identical metrics out, every time (R2/R3).
+    """
+
+    @abstractmethod
+    def get_event_statistics(self, query: AnalyticsQuery) -> EventStatistics: ...
+
+    @abstractmethod
+    def get_entity_activity(
+        self,
+        query: AnalyticsQuery,
+        entity_id: str | None = None,
+    ) -> list[CharacterActivityMetric]:
+        # entity_id given -> single metric or empty list; never raises for unknown id.
+        ...
+
+    @abstractmethod
+    def get_relationship_analytics(
+        self, query: AnalyticsQuery
+    ) -> RelationshipAnalytics: ...
+
+    def rebuild(self, query: AnalyticsQuery) -> AnalyticsSnapshot:
+        """Recompute-all entry point. Pure read path — no cache, no state."""
+        return AnalyticsSnapshot.for_query(query, self.get_event_statistics(query))

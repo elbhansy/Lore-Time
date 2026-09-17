@@ -1,0 +1,118 @@
+"""m0.9 power systems, ranks, and skills
+
+Revision ID: m0_9_power_systems
+Revises: m0_1_core_schema
+Create Date: 2026-08-26 12:00:00.000000
+
+"""
+
+import sqlalchemy as sa
+from alembic import op
+from sqlalchemy.dialects import postgresql
+
+# revision identifiers, used by Alembic.
+revision = "m0_9_power_systems"
+down_revision = "m0_1_core_schema"
+branch_labels = None
+depends_on = None
+
+
+def upgrade() -> None:
+    # Create power_systems table
+    op.create_table(
+        "power_systems",
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("series_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("name", sa.String(length=255), nullable=False),
+        sa.Column("slug", sa.String(length=255), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["series_id"],
+            ["series.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint("series_id", "slug", name="uq_power_system_series_slug"),
+    )
+
+    # Create ranks table
+    op.create_table(
+        "ranks",
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("power_system_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("name", sa.String(length=255), nullable=False),
+        sa.Column("slug", sa.String(length=255), nullable=False),
+        sa.Column("order", sa.Integer(), nullable=False),
+        sa.Column("introduced_chapter", sa.Integer(), nullable=False),
+        sa.Column("description", sa.Text(), nullable=True),
+        sa.Column("parent_rank_id", postgresql.UUID(as_uuid=True), nullable=True),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["parent_rank_id"],
+            ["ranks.id"],
+        ),
+        sa.ForeignKeyConstraint(
+            ["power_system_id"],
+            ["power_systems.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+        sa.UniqueConstraint(
+            "power_system_id", "slug", name="uq_rank_power_system_slug"
+        ),
+        sa.CheckConstraint(
+            "introduced_chapter >= 1", name="chk_rank_introduced_chapter_positive"
+        ),
+    )
+
+    # Create skills table
+    op.create_table(
+        "skills",
+        sa.Column("id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("power_system_id", postgresql.UUID(as_uuid=True), nullable=False),
+        sa.Column("name", sa.String(), nullable=False),
+        sa.Column(
+            "created_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.Column(
+            "updated_at",
+            sa.DateTime(timezone=True),
+            server_default=sa.text("now()"),
+            nullable=False,
+        ),
+        sa.ForeignKeyConstraint(
+            ["power_system_id"],
+            ["power_systems.id"],
+        ),
+        sa.PrimaryKeyConstraint("id"),
+    )
+
+
+def downgrade() -> None:
+    op.drop_table("skills")
+    op.drop_table("ranks")
+    op.drop_table("power_systems")

@@ -1,0 +1,192 @@
+Next: M3.0 — Canonical Analytics & Derived Knowledge
+
+Goal: Build deterministic, read-only analytical projections derived exclusively from the Canonical Event Store.
+
+Important: M3.0 must never become a new source of truth. Every metric must be reproducible from canonical events.
+
+M3.0 Scope
+M3.0.1 — Analytics Domain Contracts
+packages/domain/analytics/
+├── AnalyticsQuery
+├── AnalyticsMetric
+├── AnalyticsSnapshot
+├── CharacterActivityMetric
+├── RelationshipMetric
+├── EventDistributionMetric
+└── AnalyticsReader
+
+Requirements:
+
+Immutable DTOs.
+No ORM dependencies.
+No direct mutation APIs.
+Explicit series_id / time-range scoping.
+Deterministic metric definitions.
+M3.0.2 — Event Statistics Projection
+
+Derive:
+
+Total Events
+Events by Chapter
+Events by Type
+Events by Sequence
+Events by Entity
+Relationships by Type
+
+Example:
+
+{
+  "total_events": 12430,
+  "chapters": 85,
+  "event_types": {
+    "COMBAT": 3200,
+    "DIALOGUE": 5100
+  }
+}
+M3.0.3 — Character / Entity Activity
+
+Calculate:
+
+entity
+├── event_count
+├── subject_count
+├── target_count
+├── relationship_count
+├── chapters_present
+└── first_seen / last_seen
+
+This should reuse the canonical entity and relationship projections rather than duplicate resolution logic.
+
+M3.0.4 — Relationship Analytics
+
+Provide:
+
+Relationship frequency
+Most connected entities
+Relationship distribution
+Entity interaction frequency
+Chapter-by-chapter relationship changes
+
+Example:
+
+Alice
+├── KNOWS      14
+├── ATTACKED    7
+└── MEMBER_OF   2
+M3.0.5 — Analytics API
+GET /api/v1/series/{series_id}/analytics/overview
+GET /api/v1/series/{series_id}/analytics/events
+GET /api/v1/series/{series_id}/analytics/entities/{entity_id}
+GET /api/v1/series/{series_id}/analytics/relationships
+
+All endpoints must:
+
+enforce existing authorization;
+read only canonical/derived data;
+use deterministic ordering;
+support bounded pagination where applicable.
+M3.0.6 — Analytics UI
+apps/web/src/features/analytics/
+├── AnalyticsPage
+├── OverviewPanel
+├── EventDistribution
+├── EntityActivity
+├── RelationshipStatistics
+└── ChapterAnalytics
+
+UI must consume DTOs only.
+
+Critical Invariants
+Canonical Events
+      ↓
+Analytics
+
+Never:
+
+Analytics
+   ↓
+Canonical Events
+
+And:
+
+ReviewItem
+   ✗
+Analytics
+
+until:
+
+ReviewItem
+→ Published Event
+→ Canonical Store
+→ Analytics
+Verification
+Determinism
+
+Same canonical dataset:
+
+run #1 == run #2 == run #3
+Isolation
+APPROVED ReviewItem
+→ analytics unchanged
+
+PUBLISHED Event
+→ analytics updated
+Replayability
+
+Delete derived analytics projection:
+
+rebuild()
+→ identical metrics
+Canonical Immutability
+
+Analytics execution must never modify:
+
+events
+review_items
+publication_attempts
+Cross-Projection Consistency
+
+Validate:
+
+Timeline count
+=
+Search canonical count
+=
+Analytics event count
+
+for the same scope/filter.
+
+Recommended M3 Roadmap
+M2.9 ✅
+  │
+  ▼
+M3.0 — Canonical Analytics & Derived Knowledge
+  │
+  ├── M3.0.1 Domain Contracts
+  ├── M3.0.2 Event Statistics
+  ├── M3.0.3 Entity Activity
+  ├── M3.0.4 Relationship Analytics
+  ├── M3.0.5 Analytics API
+  ├── M3.0.6 Analytics UI
+  └── M3.0.7 Consistency & Replay Tests
+  │
+  ▼
+M3.1 — Temporal Knowledge & State Reconstruction
+Important architectural progression
+
+حتى الآن:
+
+M2.4  Write Canonical Truth
+M2.5  Read Canonical Truth
+M2.6  Explain Canonical Truth
+M2.7  Search Canonical Truth
+M2.8  Connect Canonical Truth
+M2.9  Verify Canonical Projections
+
+والآن:
+
+M3.0  Derive Knowledge From Canonical Truth
+
+المرحلة التالية إذن: M3.0 — Canonical Analytics & Derived Knowledge.
+
+وبالنسبة للمراحل القادمة، سأصيغ الـ implementation plans بالإنجليزية، agent-oriented، atomic، execution-ready، مع Constraints & Rules في البداية، file-level changes، acceptance criteria، tests، وexplicit non-goals بدل الصياغة الوصفية السابقة.
